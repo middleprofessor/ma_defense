@@ -1,0 +1,198 @@
+---
+title: "Defense of Model-averaged Coefficients"
+output: html_notebook
+---
+
+# Import libraries
+```{r setup}
+library(ggplot2)
+library(data.table)
+library(BMA)
+library(MuMIn)
+```
+# do math
+
+```{r}
+# generate some correlated fake X
+# fake data with correlation
+
+#usage
+# n <- 10^4 # number of cases (rows of the data)
+# p <- 5 # number of variables (columns of the data)
+# 
+# # start with a matrix. In real life this would be our data
+# X <- fake.X(n, p, fake.eigenvectors(p), fake.eigenvalues(p))
+
+random.sign <- function(u){
+  # this is fastest of three
+  out <- sign(runif(u)-0.5)
+  #randomly draws from {-1,1} with probability of each = 0.5
+  return(out)
+}
+
+fake.eigenvectors <- function(p){
+  a <- matrix(rnorm(p*p), p, p) # only orthogonal if p is infinity so need to orthogonalize it
+  a <- t(a)%*%a # this is a pseudo-covariance matrix
+  E <- eigen(a)$vectors # decompose to truly orthogonal columns
+  return(E)
+}
+
+fake.eigenvalues <- function(p, m=p, start=2/3, rate=2){
+  # m is the number of positive eigenvalues
+  # start and rate control the decline in the eigenvalue
+  
+  s <- start/seq(1:m)^rate
+  s <- c(s, rep(0, p-m)) # add zero eigenvalues
+  L <- diag(s/sum(s)*m) # rescale so that sum(s)=m and put into matrix,
+  # which would occur if all the traits are variance standardized
+  return(L)
+}
+
+fake.cov.matrix <- function(p){
+  # p is the size of the matrix (number of cols and rows)
+  E <- fake.eigenvectors(p)
+  L <- diag(fake.eigenvalues(p))
+  S <- E%*%L%*%t(E)
+  return(S)
+}
+
+# two functions to compute the random data
+fake.X <- function(n,p,E,L){
+  # n is number of observations
+  # p is number of variables
+  X <- matrix(rnorm(n*p),nrow=n,ncol=p) %*% t(E%*%sqrt(L))
+  return(X)
+}
+
+fake.alpha <- function(p, S, R2=0.9999, standardize=TRUE, omniscient=FALSE){
+  # generates standardized effect coefficients
+  # S is the TRUE covariance matrix of the explanatory variables
+  # R2 is the fraction of SStotal explained by the X
+  # Given S is the covariance of X, the variance of X%*%alpha will be R2
+  alpha.raw <- rexp(p,1)
+  if(omniscient==TRUE){alpha.raw <- sort(alpha.raw,decreasing=TRUE)}
+  alpha <- alpha.raw*random.sign(p)
+  if(standardize==TRUE){
+    alpha <- sqrt(R2)*alpha/sqrt(abs(sum(diag(alpha)%*%S%*%t(diag(alpha)))))
+  }
+  return(alpha)
+}
+
+```
+
+```{r}
+n <- 10^5
+p <- 5
+R2.i <- 0.5
+E <- fake.eigenvectors(p)
+L <- fake.eigenvalues(p)
+Sigma <- E%*%L%*%t(E)
+X <- fake.X(n, p, E, L)
+alpha <-fake.alpha(p, S=Sigma, R2.i)
+mu <- X%*%alpha
+y <- mu + sqrt(1-R2.i)*rnorm(n)
+# var(y) #check
+
+```
+
+# Why would we average over models tht we know are wrong? A toy example
+
+## Modeling the effect of the Pill on blood pressure
+
+This example is motivated by a comment from a statistician whom I sent an early version of this manuscript.
+
+p.s. (an hour later) ok, on further thought i will now muddy my own waters (in the interests of scientific frankness)
+
+let's consider again models [1] and [2]:
+
+\begin{equation}
+[1] y_i = \beta_0 + \beta_1 \, x_i + e_i
+\end{equation}
+
+\begin{equation}
+[2] y_i = \gamma_0 + \gamma_1 \, x_i + \gamma_2 \, z_i + \epsilon_i
+\end{equation}
+
+my favorite simple causal inference example is from the textbook by freedman, pisani and purves: the population of interest is adult women in the year 1960, y is blood pressure, x is binary (1 = takes the contraceptive pill, 0 = doesn't), z is age (which is a clear confound: as age goes up, blood pressure goes up and pill use goes down)
+
+this is obviously an observational study: if treatment T = ( x = 1 ) and control C = ( x = 0 ), the women assign themselves to T or C
+
+the goal is estimation of the average causal effect E of the pill on blood pressure(because, looking back now, in the early 1960s the dose was too high, and there were good physiological reasons to think that taking the 1960 pill increased blood pressure)
+
+from this perspective, $\hat{ \beta }_1$ (from, e.g., least squares) is a biased estimate of E (and we can even identify the direction of the bias: taking the pill is associated with being young, which in turn is associated with lower blood pressure, so without adjustment for confounds $\hat{ \beta }_1$ will be biased on the low side as an estimate of E)
+
+and we have good scientific reason to think that $\hat{ \gamma }_1$ is a less biased estimate of E (certainly we can't claim it's unbiased, because we haven't yet identified and adjusted for other confounds)
+
+so i admit that in this situation $\hat{ \beta }_1$ and $\hat{ \gamma }_1$ are estimating the same thing
+
+but why would anybody model average, when we *know* scientifically that $\hat{ \gamma }_1$ has less bias?
+
+## Fake Data Generator
+
+```{r fake-data-generator, message=FALSE, warning=FALSE}
+
+expit <- function(x) {exp(x)/(1+exp(x))} # the inverse logit function. This generates the probability of the event p
+
+
+# model the fake data
+# bp = b_0 + b_1 Age + b_2 Pill + epsilon
+
+n <- 100
+Age <- runif(n)*30 + 30
+Age.s <- (Age-mean(Age))/sd(Age)
+pill_freq <- -expit(Age.s*2)*.5 + 0.6
+qplot(Age, pill_freq)
+pill <- rbinom(n, 1, pill_freq)
+qplot(Age, pill)
+
+beta_0 <- 100
+beta_age <- 0.2
+beta_pill <- 2
+sigma <- 6
+
+bp <- beta_0 + beta_age*Age + beta_pill*pill + rnorm(n, sd=sigma)
+qplot(Age, bp, color=factor(pill))
+coef(summary(lm(bp ~ Age + factor(pill))))
+
+# okay now turn into simulation experiment that modifies the pill effect
+
+beta_pill_array <- c(1, 2, 3)
+res_table <- data.table(NULL)
+for(beta_pill in beta_pill_array){
+  niter <- 1000
+  ols <- numeric(niter)
+  bma <- numeric(niter)
+  fma <- numeric(niter)
+  for(i in 1:niter){
+    Age <- runif(n)*30 + 30
+    Age.s <- (Age-mean(Age))/sd(Age)
+    pill_freq <- -expit(Age.s*2)*.5 + 0.6
+    pill <- rbinom(n, 1, pill_freq)
+    bp <- beta_0 + beta_age*Age + beta_pill*pill + rnorm(n, sd=sigma)
+    fit1 <- lm(bp ~ Age + factor(pill), na.action="na.fail")
+    fit2 <- bicreg(x=data.table(Age=Age, pill=factor(pill)), y=bp)
+    fit3 <- model.avg(dredge(fit1))
+    ols[i] <- coef(fit1)["factor(pill)1"]
+    bma[i] <- fit2$postmean["pill1"]
+    fma[i] <- fit3$coefficients["full","factor(pill)1"]
+  }
+  res_table <- rbind(res_table, data.table(beta=beta_pill, ols=ols, bma=bma, fma=fma))
+}
+res_table_long <- melt(res_table, id.var="beta", variable.name="Estimator", value.name="Estimate")
+res_table_long[, Error:=Estimate-beta]
+rmse <- res_table_long[, .(rmse=sqrt(mean(Error^2))), by=.(beta, Estimator)]
+#qplot(x=factor(beta), y=Estimate, geom="boxplot", fill=Estimator, data=res_table_long)
+
+sum_table <- res_table_long[, .(mean=mean(Estimate),
+                                sd=sd(Estimate),
+                                low=quantile(Estimate, 0.025),
+                                hi=quantile(Estimate, 0.975)), by=.(beta, Estimator)]
+
+knitr::kable(rmse, digits=2)
+gg <- ggplot(data=sum_table, aes(x=factor(beta), y=mean, color=Estimator)) +
+  geom_point(position=position_dodge(.5)) +
+  geom_errorbar(aes(ymin=low, ymax=hi), position=position_dodge(.5), width=0.2) +
+  NULL
+gg
+```
+

@@ -1,0 +1,34 @@
+---
+title: "Notes"
+author: "Jeffrey A. Walker"
+date: "6/12/2018"
+output: html_document
+---
+
+# Why statistical model (goals of the model)
+## An Introduction to Statistical Learning
+with Applications in R (James, Whitten, Hastie, Tibrishani 2013)
+
+There are two main reasons that we may wish to estimate f: prediction
+and inference. We discuss each in turn.
+
+We are often interested in understanding the way that Y is affected as X1,...,Xp change. In this situation we wish to estimate f, but our goal is not necessarily to make predictions for Y . We instead want to understand the relationship between X and Y , or more specifically, to understand how Y changes as a function of X1, . . . , Xp. Now fˆ cannot be treated as a black box, because we need to know its exact form. In this setting, one may be interested in answering the following questions:
+
+1. Which predictors are associated with the response? It is often the case that only a small fraction of the available predictors are substantially associated with Y . Identifying the few important predictors among a large set of possible variables can be extremely useful, depending on the application.
+
+2. What is the relationship between the response and each predictor? Some predictors may have a positive relationship with Y , in the sense that increasing the predictor is associated with increasing values of Y . Other predictors may have the opposite relationship. Depending on the complexity of f, the relationship between the response and a given predictor may also depend on the values of the other predictors.
+
+3. Can the relationship between Y and each predictor be adequately sum- marized using a linear equation, or is the relationship more compli- cated? Historically, most methods for estimating f have taken a linear form. In some situations, such an assumption is reasonable or even desirable. But often the true relationship is more complicated, in which case a linear model may not provide an accurate representation of the relationship between the input and output variables.
+
+In this book, we will see a number of examples that fall into the prediction setting, the inference setting, or a combination of the two.
+
+For instance, consider a company that is interested in conducting a direct-marketing campaign. The goal is to identify individuals who will respond positively to a mailing, based on observations of demographic vari- ables measured on each individual. In this case, the demographic variables serve as predictors, and response to the marketing campaign (either pos- itive or negative) serves as the outcome. The company is not interested in obtaining a deep understanding of the relationships between each in- dividual predictor and the response; instead, the company simply wants an accurate model to predict the response using the predictors. This is an example of modeling for prediction.
+In contrast, consider the Advertising data illustrated in Figure 2.1. One may be interested in answering questions such as:
+
+– Which media contribute to sales?
+
+– Which media generate the biggest boost in sales? or
+
+– How much increase in sales is associated with a given increase in TV advertising?
+
+This situation falls into the inference paradigm. Another example involves modeling the brand of a product that a customer might purchase based on variables such as price, store location, discount levels, competition price, and so forth. In this situation one might really be most interested in how each of the individual variables affects the probability of purchase. For instance, **what effect will changing the price of a product have on sales?** This is an example of modeling for inference.

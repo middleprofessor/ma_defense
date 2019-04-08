@@ -1,0 +1,139 @@
+---
+title: "Defense of Model-averaged Coefficients"
+output: html_notebook
+---
+
+# Import libraries
+```{r setup}
+library(ggplot2)
+library(data.table)
+library(mvtnorm)
+```
+
+# Why would we average over models tht we know are wrong? A toy example
+
+## Modeling the effect of the Pill on blood pressure
+
+This example is motivated by a comment from a statistician whom I sent an early version of this manuscript.
+
+p.s. (an hour later) ok, on further thought i will now muddy my own waters (in the interests of scientific frankness)
+
+let's consider again models [1] and [2]:
+
+\begin{equation}
+[1] y_i = \beta_0 + \beta_1 \, x_i + e_i
+\end{equation}
+
+\begin{equation}
+[2] y_i = \gamma_0 + \gamma_1 \, x_i + \gamma_2 \, z_i + \epsilon_i
+\end{equation}
+
+my favorite simple causal inference example is from the textbook by freedman, pisani and purves: the population of interest is adult women in the year 1960, y is blood pressure, x is binary (1 = takes the contraceptive pill, 0 = doesn't), z is age (which is a clear confound: as age goes up, blood pressure goes up and pill use goes down)
+
+this is obviously an observational study: if treatment T = ( x = 1 ) and control C = ( x = 0 ), the women assign themselves to T or C
+
+the goal is estimation of the average causal effect E of the pill on blood pressure(because, looking back now, in the early 1960s the dose was too high, and there were good physiological reasons to think that taking the 1960 pill increased blood pressure)
+
+from this perspective, $\hat{ \beta }_1$ (from, e.g., least squares) is a biased estimate of E (and we can even identify the direction of the bias: taking the pill is associated with being young, which in turn is associated with lower blood pressure, so without adjustment for confounds $\hat{ \beta }_1$ will be biased on the low side as an estimate of E)
+
+and we have good scientific reason to think that $\hat{ \gamma }_1$ is a less biased estimate of E (certainly we can't claim it's unbiased, because we haven't yet identified and adjusted for other confounds)
+
+so i admit that in this situation $\hat{ \beta }_1$ and $\hat{ \gamma }_1$ are estimating the same thing
+
+but why would anybody model average, when we *know* scientifically that $\hat{ \gamma }_1$ has less bias?
+
+## Fake Data Generator
+
+```{r fake-data-generator}
+# bp = b_0 + b_1 Age + b_2 Pill + epsilon
+
+n <- 100
+Age <- runif(40, 60 n)
+```
+
+# Fake Data Generator
+## FDG 1 - Pearl
+
+This FDG follows Pearl and Shalizi. "Operation" on X changes the probability distribution of Y. This is casual conditioning.
+
+```{r fake data generator 1}
+n <- 10^4 # sufficiently large to get expected values
+beta_1 <- 0.5 # the effect parameter
+x1_t0 <- rnorm(n) # the x before intervention
+y_t0 <- rnorm(n) # the y before intervention
+x1_t1 <- x1_t0 + rep(c(0, 0.5, 1, 1.5, 2), each=n/5) # the x after intervention
+y_t1 <- y_t0 + beta_1*x1_t1 + rnorm(n, sd=1) # the FDG
+coefficients(summary(lm(y_t1 ~ x1_t1))) # expectation = beta_1
+
+```
+
+## FDG 1B - simple generator
+Same as FDG 1 except that the starting y are all zero and we don't know the pre-intervention value of x.
+```{r}
+n <- 10^4 # sufficiently large to get expected values
+beta_1 <- 0.5 # the effect parameter
+x_1 <- rnorm(n)
+sigma_fdg1 <- 1
+y <- beta_1*x_1 + rnorm(n, sd=sigma_fdg1)
+var(y) # expectation = beta_1^2 + sigma_fdg1^2 = 1.25
+coefficients(summary(lm(y ~ x_1))) # expectation = beta_1
+```
+
+## FDG number 2. I like this way because it emphasizes what a correlation between variables means.
+```{r}
+n <- 10^4 # sufficiently large to get expected values
+beta_1 <- 0.5
+beta_2 <- -0.3
+
+# compute x1 and x2
+gamma_1 <- 0.6
+gamma_2 <- -0.8
+sigma_1 <- sqrt(1 - gamma_1^2)
+sigma_2 <- sqrt(1 - gamma_2^2)
+z <- rnorm(n)
+x_1 <- gamma_1*z + rnorm(n, sd=sigma_1)
+x_2 <- gamma_2*z + rnorm(n, sd=sigma_2)
+var(x_1)
+var(x_2)
+cor(x_1, x_2) # expectation is gamma1 * gamma2
+
+sigma_fdg2 <- 1
+y <- beta_1*x_1 + beta_2*x_2 + rnorm(n, sd=sigma_fdg2)
+var(y)
+beta_1^2 + beta_2^2 + 2*beta_1*beta_2*gamma_1*gamma_2 + sigma_fdg2^2 # expected variance
+coefficients(summary(lm(y ~ x_1 + x_2)))
+```
+
+## FDG #2 with less code and black box correlation
+
+```{r}
+n <- 10^4
+beta <- c(0.5, -0.3)
+rho <- -.48
+X <- rmvnorm(n, sigma=matrix(c(1, rho, rho, 1), nrow=2))
+y <- X%*%beta + rnorm(n, mean=0, sd=1)
+coefficients(summary(lm(y ~ X)))
+cor(X)
+```
+
+
+
+
+```{r }
+n <- 10^4
+beta <- c(0.5, -0.3)
+rho <- -.48
+X_t0 <- rmvnorm(n, sigma=matrix(c(1, rho, rho, 1), nrow=2))
+y_t0 <- rnorm(n) # the y before intervention
+X_t1 <- X_t0
+delta_x1 <- rep(c(0, 0.5, 1, 1.5, 10), each=n/5)
+X_t1[, 1] <- X_t0[, 1] + delta_x1
+y_t1 <- y_t0 + X_t1%*%beta + rnorm(n, mean=0, sd=1)
+yhat_t1 <- mean(predict(lm(y_t1 ~ X_t1)))
+yhat_t0 <- mean(predict(lm(y_t0 ~ X_t0)))
+(yhat_t1 - yhat_t0)/mean(delta_x1) # difference in expected Y | do x=x+1
+
+coefficients(summary(lm(y_t1 ~ X_t1)))
+
+```
+

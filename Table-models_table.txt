@@ -1,0 +1,6 @@
+Regression Model	Generating Model
+$Y=b_0 + b_1 X_1 + b_2 X_2 + e$	Prob: $Y=\alpha^{(1)}_0 + \alpha^{(1)}_1 X_1 + \alpha^{(1)}_2 X_2 + \varepsilon^{(1)}$
+	Causal: $Y=\beta_0 + \beta_1 X_1 + \beta_2 X_2 + \varepsilon^{(1)}$
+$Y=b_0 + b_1 X_1 + e$	Prob: $Y=\alpha^{(2)}_0 + \alpha^{(2)}_1 X_1 + \varepsilon^{(2)}$
+	Causal: $Y=\beta_0 + \beta_1 X_1 + \varepsilon^{(3)}$,
+	     $\varepsilon^{(3)} = \beta_2 X_2 + \varepsilon^{(1)}$
